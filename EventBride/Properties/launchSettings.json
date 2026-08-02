@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "EventBride": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:9815;http://localhost:9816"
+    }
+  }
+}
