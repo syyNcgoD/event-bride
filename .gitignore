@@ -1,0 +1,28 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+
+## IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+
+## Build
+TestResults/
+publish/
+
+## Secrets
+appsettings.Development.json
+appsettings.*.local.json
+*.pfx
+*.key
+
+## OS
+Thumbs.db
+.DS_Store
