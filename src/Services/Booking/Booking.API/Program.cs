@@ -4,6 +4,7 @@ using Booking.Application;
 using Booking.Application.BackgroundJobs;
 using Booking.Infrastructure;
 using Common.Logging;
+using EventBus.RabbitMQ;
 using Hangfire;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,7 @@ builder.AddCommonSerilog();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddEventBus(builder.Configuration);
 
 // پیکربندی Hangfire
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")

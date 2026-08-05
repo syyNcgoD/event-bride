@@ -2,6 +2,8 @@ using Booking.Application.Common.Models;
 using Booking.Application.DTOs;
 using Booking.Domain.Entities;
 using Booking.Domain.Interfaces;
+using EventBus.RabbitMQ.Events;
+using MassTransit;
 using MediatR;
 
 namespace Booking.Application.Commands.Orders;
@@ -15,10 +17,12 @@ public record ConfirmPaymentCommand(
 public class ConfirmPaymentCommandHandler : IRequestHandler<ConfirmPaymentCommand, ApiResponse<OrderResponse>>
 {
     private readonly IOrderRepository _orderRepository;
+    private readonly IPublishEndpoint _publishEndpoint;
 
-    public ConfirmPaymentCommandHandler(IOrderRepository orderRepository)
+    public ConfirmPaymentCommandHandler(IOrderRepository orderRepository, IPublishEndpoint publishEndpoint)
     {
         _orderRepository = orderRepository;
+        _publishEndpoint = publishEndpoint;
     }
 
     public async Task<ApiResponse<OrderResponse>> Handle(ConfirmPaymentCommand request, CancellationToken cancellationToken)
@@ -89,6 +93,21 @@ public class ConfirmPaymentCommandHandler : IRequestHandler<ConfirmPaymentComman
         {
             return ApiResponse<OrderResponse>.Fail("پرداخت انجام شد اما بازیابی ناموفق بود");
         }
+
+        // انتشار رویداد برای Notification Service
+        var eventTitle = updated.Items.FirstOrDefault()?.EventTitle ?? "رویداد";
+        var totalTickets = updated.Items.Sum(i => i.Quantity);
+
+        await _publishEndpoint.Publish(new BookingConfirmedEvent
+        {
+            OrderId = updated.Id,
+            OrderNumber = updated.OrderNumber,
+            UserEmail = updated.Email,
+            UserPhone = updated.PhoneNumber,
+            TotalAmount = updated.TotalAmount,
+            EventTitle = eventTitle,
+            TotalTickets = totalTickets
+        }, cancellationToken);
 
         return ApiResponse<OrderResponse>.Ok(
             MapToResponse(updated), "پرداخت موفق و بلیط تأیید شد");
