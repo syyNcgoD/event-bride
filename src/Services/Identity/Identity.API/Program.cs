@@ -1,4 +1,5 @@
 using System.Text;
+using Common.Logging;
 using Identity.API.Middleware;
 using Identity.Application;
 using Identity.Application.Common.Models;
@@ -9,6 +10,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.AddCommonSerilog();
 
 // ثبت سرویس‌ها
 builder.Services.AddApplication();

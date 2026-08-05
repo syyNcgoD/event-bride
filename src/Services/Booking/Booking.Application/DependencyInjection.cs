@@ -1,3 +1,4 @@
+using Booking.Application.BackgroundJobs;
 using Booking.Application.Common.Behaviours;
 using FluentValidation;
 using MediatR;
@@ -17,6 +18,8 @@ public static class DependencyInjection
         services.AddAutoMapper(Assembly.GetExecutingAssembly());
 
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+
+        services.AddScoped<ReservationCleanupJob>();
 
         return services;
     }

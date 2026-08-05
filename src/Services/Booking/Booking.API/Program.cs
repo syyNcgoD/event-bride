@@ -1,7 +1,10 @@
 using System.Text;
 using Booking.API.Middleware;
 using Booking.Application;
+using Booking.Application.BackgroundJobs;
 using Booking.Infrastructure;
+using Common.Logging;
+using Hangfire;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -9,8 +12,22 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.AddCommonSerilog();
+
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// پیکربندی Hangfire
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Connection string not found.");
+
+builder.Services.AddHangfire(configuration => configuration
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(connectionString));
+
+builder.Services.AddHangfireServer();
 
 // JWT Authentication (همان Secret با Identity Service)
 var jwtSecret = builder.Configuration["JwtSettings:Secret"]
@@ -94,5 +111,13 @@ using (var scope = app.Services.CreateScope())
     var dbContext = scope.ServiceProvider.GetRequiredService<Booking.Infrastructure.Persistence.BookingDbContext>();
     await dbContext.Database.MigrateAsync();
 }
+
+app.UseHangfireDashboard("/hangfire");
+
+// ثبت Job زمان‌بندی‌شده (اجرا هر ۱ دقیقه)
+RecurringJob.AddOrUpdate<ReservationCleanupJob>(
+    "cleanup-expired-reservations",
+    job => job.ProcessExpiredReservationsAsync(),
+    Cron.Minutely);
 
 app.Run();

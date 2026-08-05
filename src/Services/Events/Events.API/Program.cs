@@ -1,4 +1,6 @@
 using System.Text;
+using Common.Caching;
+using Common.Logging;
 using Events.API.Middleware;
 using Events.Application;
 using Events.Infrastructure;
@@ -9,8 +11,11 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.AddCommonSerilog();
+
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddCommonCaching(builder.Configuration);
 
 // JWT Authentication (همان Secret با Identity Service)
 var jwtSecret = builder.Configuration["JwtSettings:Secret"]

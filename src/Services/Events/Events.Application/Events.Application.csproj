@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Events.Domain\Events.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Caching\Common.Caching.csproj" />
   </ItemGroup>
 
 </Project>
