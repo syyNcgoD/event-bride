@@ -1,0 +1,68 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ============ Build & Test (همه برنچ‌ها) ============
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore EventBride.slnx
+
+      - name: Build solution
+        run: dotnet build EventBride.slnx --configuration Release --no-restore
+
+      - name: Test solution
+        run: dotnet test EventBride.slnx --configuration Release --no-build --verbosity normal
+
+  # ============ Docker Build (فقط روی main) ============
+  docker-build:
+    name: Docker Build Check
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Identity Docker image
+        run: docker build -f src/Services/Identity/Identity.API/Dockerfile -t eventbride/identity-api:latest .
+
+      - name: Build Events Docker image
+        run: docker build -f src/Services/Events/Events.API/Dockerfile -t eventbride/events-api:latest .
+
+      - name: Build Booking Docker image
+        run: docker build -f src/Services/Booking/Booking.API/Dockerfile -t eventbride/booking-api:latest .
+
+      - name: Build Notification Docker image
+        run: docker build -f src/Services/Notification/Notification.API/Dockerfile -t eventbride/notification-api:latest .
+
+      - name: Build Gateway Docker image
+        run: docker build -f src/Gateway/ApiGateway/Dockerfile -t eventbride/gateway:latest .
+
+  # ============ Deploy (اختیاری - نیاز به Secrets) ============
+  # deploy:
+  #   name: Deploy
+  #   needs: docker-build
+  #   if: github.ref == 'refs/heads/main'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Deploy to Azure App Service
+  #       uses: azure/webapps-deploy@v3
+  #       with:
+  #         app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+  #         publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}

@@ -30,4 +30,7 @@
   <Folder Name="/src/Services/Notification/">
     <Project Path="src/Services/Notification/Notification.API/Notification.API.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Events.UnitTests/Events.UnitTests.csproj" />
+  </Folder>
 </Solution>
