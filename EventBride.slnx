@@ -1,6 +1,12 @@
 <Solution>
   <Folder Name="/src/" />
   <Folder Name="/src/Services/" />
+  <Folder Name="/src/Services/Booking/">
+    <Project Path="src/Services/Booking/Booking.API/Booking.API.csproj" />
+    <Project Path="src/Services/Booking/Booking.Application/Booking.Application.csproj" />
+    <Project Path="src/Services/Booking/Booking.Domain/Booking.Domain.csproj" />
+    <Project Path="src/Services/Booking/Booking.Infrastructure/Booking.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/Services/Events/">
     <Project Path="src/Services/Events/Events.API/Events.API.csproj" />
     <Project Path="src/Services/Events/Events.Application/Events.Application.csproj" />

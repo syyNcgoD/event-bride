@@ -42,6 +42,8 @@ public class CreateTicketTypeRequest
 
 public record TicketTypeResponse(
     int Id,
+    int EventId,
+    string EventTitle,
     string Name,
     string? Description,
     decimal Price,

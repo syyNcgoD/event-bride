@@ -28,6 +28,7 @@ public class TicketTypeRepository : ITicketTypeRepository
     {
         return await _dbContext.TicketTypes
             .AsNoTracking()
+            .Include(tt => tt.Event)
             .FirstOrDefaultAsync(tt => tt.Id == id, cancellationToken);
     }
 
@@ -47,5 +48,51 @@ public class TicketTypeRepository : ITicketTypeRepository
     {
         _dbContext.TicketTypes.Remove(ticketType);
         await _dbContext.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// رزرو اتمیک با UPDATE شرطی:
+    /// - فقط اگر موجودی کافی باشد (SoldCount + qty <= Quantity) و فروش فعال باشد
+    /// - SQL Server در UPDATE به صورت خودکار قفل انحصاری می‌گیرد
+    /// - دو رزرو همزمان: یکی موفق می‌شود، دیگری صفر ردیف (rows affected = 0)
+    /// </summary>
+    public async Task<bool> TryReserveAsync(
+        int ticketTypeId, int eventId, int quantity, CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+
+        var rowsAffected = await _dbContext.Database.ExecuteSqlRawAsync(
+            """
+            UPDATE [TicketTypes]
+            SET [SoldCount] = [SoldCount] + {0},
+                [UpdatedAt] = GETUTCDATE()
+            WHERE [Id] = {1}
+              AND [EventId] = {2}
+              AND [SoldCount] + {0} <= [Quantity]
+              AND [SaleStart] <= {3}
+              AND [SaleEnd] >= {3}
+            """,
+            quantity, ticketTypeId, eventId, now);
+
+        return rowsAffected > 0;
+    }
+
+    /// <summary>
+    /// آزادسازی اتمیک: افزایش موجودی (برعکس رزرو)
+    /// </summary>
+    public async Task<bool> TryReleaseAsync(
+        int ticketTypeId, int quantity, CancellationToken cancellationToken = default)
+    {
+        var rowsAffected = await _dbContext.Database.ExecuteSqlRawAsync(
+            """
+            UPDATE [TicketTypes]
+            SET [SoldCount] = [SoldCount] - {0},
+                [UpdatedAt] = GETUTCDATE()
+            WHERE [Id] = {1}
+              AND [SoldCount] - {0} >= 0
+            """,
+            quantity, ticketTypeId);
+
+        return rowsAffected > 0;
     }
 }

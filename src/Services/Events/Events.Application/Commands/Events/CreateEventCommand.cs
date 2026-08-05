@@ -94,7 +94,7 @@ public class CreateEventCommandHandler : IRequestHandler<CreateEventCommand, Api
             @event.IsFeatured,
             @event.IsUpcoming,
             @event.TicketTypes.Select(tt => new TicketTypeResponse(
-                tt.Id, tt.Name, tt.Description, tt.Price, tt.Quantity,
+                tt.Id, tt.EventId, tt.Event!.Title, tt.Name, tt.Description, tt.Price, tt.Quantity,
                 tt.SoldCount, tt.AvailableQuantity, tt.MaxPerOrder,
                 tt.SaleStart, tt.SaleEnd)).ToList());
     }
