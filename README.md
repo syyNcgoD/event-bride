@@ -134,13 +134,4 @@ src/
    - Hangfire Dashboard: `http://localhost:5003/hangfire`
 
 ---
-
-## 💡 What's Next? (Roadmap)
-- [ ] Implement API Gateway (Ocelot / YARP)
-- [ ] Add `docker-compose.yml` for unified spin-up
-- [ ] Migrate Inter-service sync communication (Booking ➔ Events) from HTTP to gRPC
-- [ ] Write Unit/Integration Tests using xUnit and `WebApplicationFactory`
-- [ ] Add OpenTelemetry for Distributed Tracing (Jaeger)
-
----
 *Developed as a showcase of enterprise-grade backend engineering practices in .NET ecosystem.*

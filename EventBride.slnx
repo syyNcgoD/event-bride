@@ -5,6 +5,9 @@
     <Project Path="src/BuildingBlocks/Common.Logging/Common.Logging.csproj" />
     <Project Path="src/BuildingBlocks/EventBus.RabbitMQ/EventBus.RabbitMQ.csproj" />
   </Folder>
+  <Folder Name="/src/Gateway/">
+    <Project Path="src/Gateway/ApiGateway/ApiGateway.csproj" />
+  </Folder>
   <Folder Name="/src/Services/" />
   <Folder Name="/src/Services/Booking/">
     <Project Path="src/Services/Booking/Booking.API/Booking.API.csproj" />
