@@ -6,6 +6,7 @@
   [![RabbitMQ](https://img.shields.io/badge/RabbitMQ-Message_Broker-FF6600?logo=rabbitmq)](https://www.rabbitmq.com/)
   [![Redis](https://img.shields.io/badge/Redis-Distributed_Cache-DC382D?logo=redis)](https://redis.io/)
   [![Docker](https://img.shields.io/badge/Docker-Containerization-2496ED?logo=docker)](https://www.docker.com/)
+  [![Graphify](https://img.shields.io/badge/Graphify-1169_Nodes-8B5CF6?logo=graphql)](docs/graph/graph.html)
 </div>
 
 <br/>
@@ -97,6 +98,26 @@ src/
   - `Hangfire` (Background processing)
   - `MassTransit` (RabbitMQ Abstraction)
   - `Serilog` (Structured logging)
+
+---
+
+## 🕸️ Interactive Knowledge Graph (Graphify)
+
+This repository is fully indexed with [Graphify](https://github.com/Graphify-Labs/graphify) — a developer tool that turns codebases into a queryable knowledge graph. Instead of reading hundreds of files, you can *traverse* the architecture.
+
+**Graph stats:** `1,169 nodes` · `2,030 edges` · `104 communities` (97% extracted from source)
+
+- **[▶️ Open the Interactive Graph](docs/graph/graph.html)** — pan, zoom, and explore how every service, handler, and repository connects.
+- **[📄 Read the Graph Report](docs/graph/GRAPH_REPORT.md)** — community hubs, god nodes, and subsystem boundaries.
+
+```bash
+# Query the graph from your terminal
+graphify path "Event" "Order"                    # how do they connect?
+graphify explain "PessimisticLock"               # explain a concept
+graphify query "what connects Booking to Notification?"  # free-form
+```
+
+> Generated locally with `graphify extract --code-only` — no code ever leaves your machine.
 
 ---
 
