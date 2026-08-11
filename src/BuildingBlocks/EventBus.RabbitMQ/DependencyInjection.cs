@@ -13,7 +13,8 @@ public static class DependencyInjection
     public static IServiceCollection AddEventBus(
         this IServiceCollection services,
         IConfiguration configuration,
-        Assembly? consumersAssembly = null)
+        Assembly? consumersAssembly = null,
+        Action<IBusRegistrationConfigurator>? configure = null)
     {
         var rabbitMqHost = configuration["RabbitMQ:Host"] ?? "localhost";
         var rabbitMqUser = configuration["RabbitMQ:Username"] ?? "guest";
@@ -28,6 +29,9 @@ public static class DependencyInjection
             }
 
             x.SetKebabCaseEndpointNameFormatter();
+
+            // اجازهٔ پیکربندی اضافه از سمت سرویس (مثل فعال‌سازی Outbox)
+            configure?.Invoke(x);
 
             x.UsingRabbitMq((context, cfg) =>
             {

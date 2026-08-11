@@ -1,4 +1,5 @@
 using Booking.Domain.Entities;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 
 namespace Booking.Infrastructure.Persistence;
@@ -18,6 +19,11 @@ public class BookingDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        // جداول Transactional Outbox — تضمین تحویل پیام حتی با crash
+        builder.AddInboxStateEntity();
+        builder.AddOutboxMessageEntity();
+        builder.AddOutboxStateEntity();
 
         builder.Entity<Order>(entity =>
         {

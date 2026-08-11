@@ -1,3 +1,4 @@
+using Common.Caching;
 using Events.Application.Common.Models;
 using Events.Application.DTOs;
 using Events.Domain.Entities;
@@ -22,12 +23,16 @@ public class CreateEventCommandHandler : IRequestHandler<CreateEventCommand, Api
 {
     private readonly IEventRepository _eventRepository;
     private readonly ITicketTypeRepository _ticketTypeRepository;
+    private readonly ICacheService _cacheService;
 
     public CreateEventCommandHandler(
         IEventRepository eventRepository,
-        ITicketTypeRepository ticketTypeRepository)
+        ITicketTypeRepository ticketTypeRepository,
+        ICacheService cacheService)
     {
         _eventRepository = eventRepository;
+        _ticketTypeRepository = ticketTypeRepository;
+        _cacheService = cacheService;
         _ticketTypeRepository = ticketTypeRepository;
     }
 
@@ -63,6 +68,9 @@ public class CreateEventCommandHandler : IRequestHandler<CreateEventCommand, Api
                 SaleEnd = ticketType.SaleEnd
             }, cancellationToken);
         }
+
+        // رویداد جدید اضافه شد — کش لیست رویدادها را پاک کن
+        await _cacheService.RemoveByPatternAsync("EventBride:events:*", cancellationToken);
 
         var created = await _eventRepository.GetByIdWithDetailsAsync(@event.Id, cancellationToken);
         if (created is null)

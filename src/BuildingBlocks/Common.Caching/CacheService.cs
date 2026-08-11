@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 
 namespace Common.Caching;
 
@@ -11,17 +12,20 @@ public class CacheService : ICacheService
     private readonly IMemoryCache _memoryCache;
     private readonly ILogger<CacheService> _logger;
     private readonly bool _useDistributed;
+    private readonly IConnectionMultiplexer? _redis;
 
     public CacheService(
         IDistributedCache distributedCache,
         IMemoryCache memoryCache,
         ILogger<CacheService> logger,
+        IConnectionMultiplexer? redis = null,
         bool useDistributed = true)
     {
         _distributedCache = distributedCache;
         _memoryCache = memoryCache;
         _logger = logger;
         _useDistributed = useDistributed;
+        _redis = redis;
     }
 
     public async Task<T?> GetOrSetAsync<T>(
@@ -98,6 +102,33 @@ public class CacheService : ICacheService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Cache REMOVE failed for {Key}", key);
+        }
+    }
+
+    public async Task RemoveByPatternAsync(string pattern, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (_redis is not null)
+            {
+                var server = _redis.GetServer(_redis.GetEndPoints().First());
+                var keys = server.Keys(pattern: pattern).ToArray();
+                foreach (var key in keys)
+                {
+                    // StackExchangeRedisCache کلیدها را با InstanceName (مثل EventBride:) ذخیره می‌کند.
+                    // RemoveAsync خودش InstanceName را دوباره اضافه می‌کند، پس باید کلید خام (بدون prefix) را بدهیم.
+                    var keyString = key.ToString();
+                    if (keyString.StartsWith("EventBride:", StringComparison.Ordinal))
+                    {
+                        keyString = keyString["EventBride:".Length..];
+                    }
+                    await _distributedCache.RemoveAsync(keyString, cancellationToken);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Cache REMOVE by pattern failed for {Pattern}", pattern);
         }
     }
 

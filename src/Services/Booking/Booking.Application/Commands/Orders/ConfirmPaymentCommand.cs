@@ -1,3 +1,4 @@
+using System.Transactions;
 using Booking.Application.Common.Models;
 using Booking.Application.DTOs;
 using Booking.Domain.Entities;
@@ -61,6 +62,10 @@ public class ConfirmPaymentCommandHandler : IRequestHandler<ConfirmPaymentComman
                 "مهلت پرداخت تمام شده است. لطفاً دوباره رزرو کنید.", null);
         }
 
+        // Transactional Outbox: ذخیره سفارش + نوشتن پیام در Outbox،
+        // داخل یک تراکنش — اگه هرکدوم fail بشه، هیچ‌کدوم commit نمی‌شه.
+        using var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+
         // ثبت پرداخت موفق
         order.Payments.Add(new Payment
         {
@@ -88,26 +93,29 @@ public class ConfirmPaymentCommandHandler : IRequestHandler<ConfirmPaymentComman
 
         await _orderRepository.UpdateAsync(order);
 
+        // انتشار رویداد برای Notification Service
+        var eventTitle = order.Items.FirstOrDefault()?.EventTitle ?? "رویداد";
+        var totalTickets = order.Items.Sum(i => i.Quantity);
+
+        await _publishEndpoint.Publish(new BookingConfirmedEvent
+        {
+            OrderId = order.Id,
+            OrderNumber = order.OrderNumber,
+            UserEmail = order.Email,
+            UserPhone = order.PhoneNumber,
+            TotalAmount = order.TotalAmount,
+            EventTitle = eventTitle,
+            TotalTickets = totalTickets
+        }, cancellationToken);
+
+        // Commit تراکنش — هم سفارش ذخیره می‌شه هم پیام در Outbox
+        scope.Complete();
+
         var updated = await _orderRepository.GetByIdWithItemsAsync(order.Id, cancellationToken);
         if (updated is null)
         {
             return ApiResponse<OrderResponse>.Fail("پرداخت انجام شد اما بازیابی ناموفق بود");
         }
-
-        // انتشار رویداد برای Notification Service
-        var eventTitle = updated.Items.FirstOrDefault()?.EventTitle ?? "رویداد";
-        var totalTickets = updated.Items.Sum(i => i.Quantity);
-
-        await _publishEndpoint.Publish(new BookingConfirmedEvent
-        {
-            OrderId = updated.Id,
-            OrderNumber = updated.OrderNumber,
-            UserEmail = updated.Email,
-            UserPhone = updated.PhoneNumber,
-            TotalAmount = updated.TotalAmount,
-            EventTitle = eventTitle,
-            TotalTickets = totalTickets
-        }, cancellationToken);
 
         return ApiResponse<OrderResponse>.Ok(
             MapToResponse(updated), "پرداخت موفق و بلیط تأیید شد");

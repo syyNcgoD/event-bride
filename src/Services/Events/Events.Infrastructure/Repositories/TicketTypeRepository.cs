@@ -63,7 +63,7 @@ public class TicketTypeRepository : ITicketTypeRepository
 
         var rowsAffected = await _dbContext.Database.ExecuteSqlRawAsync(
             """
-            UPDATE [TicketTypes]
+            UPDATE [TicketTypes] WITH (UPDLOCK, ROWLOCK)
             SET [SoldCount] = [SoldCount] + {0},
                 [UpdatedAt] = GETUTCDATE()
             WHERE [Id] = {1}
@@ -85,7 +85,7 @@ public class TicketTypeRepository : ITicketTypeRepository
     {
         var rowsAffected = await _dbContext.Database.ExecuteSqlRawAsync(
             """
-            UPDATE [TicketTypes]
+            UPDATE [TicketTypes] WITH (UPDLOCK, ROWLOCK)
             SET [SoldCount] = [SoldCount] - {0},
                 [UpdatedAt] = GETUTCDATE()
             WHERE [Id] = {1}

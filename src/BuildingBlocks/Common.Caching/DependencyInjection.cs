@@ -24,6 +24,9 @@ public static class DependencyInjection
                 options.Configuration = redisConnection;
                 options.InstanceName = "EventBride:";
             });
+
+            // اتصال مستقیم به Redis برای عملیات pattern (مثل پاک کردن گروهی کش)
+            services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConnection!));
         }
         else
         {
@@ -31,12 +34,18 @@ public static class DependencyInjection
             services.AddDistributedMemoryCache();
         }
 
-        services.AddSingleton<ICacheService, CacheService>(sp =>
+        services.AddSingleton<ICacheService>(sp =>
             new CacheService(
                 sp.GetRequiredService<IDistributedCache>(),
                 sp.GetRequiredService<IMemoryCache>(),
                 sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<CacheService>>(),
+                useRedis ? sp.GetRequiredService<IConnectionMultiplexer>() : null,
                 useRedis));
+
+        services.AddSingleton<IDistributedLockService>(sp =>
+            new DistributedLockService(
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<DistributedLockService>>(),
+                useRedis ? sp.GetRequiredService<IConnectionMultiplexer>() : null));
 
         return services;
     }

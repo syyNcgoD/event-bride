@@ -1,4 +1,5 @@
 using Booking.Domain.Interfaces;
+using Hangfire;
 using Microsoft.Extensions.Logging;
 
 namespace Booking.Application.BackgroundJobs;
@@ -21,7 +22,9 @@ public class ReservationCleanupJob
 
     /// <summary>
     /// این متد توسط Hangfire صدا زده می‌شود تا رزروهای منقضی شده را آزاد کند
+    /// قفل توزیع‌شده Hangfire مانع اجرای همزمان در چند رپلیکا می‌شود
     /// </summary>
+    [DisableConcurrentExecution(timeoutInSeconds: 300)]
     public async Task ProcessExpiredReservationsAsync()
     {
         _logger.LogInformation("Starting expired reservations cleanup job...");

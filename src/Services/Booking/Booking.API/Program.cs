@@ -3,9 +3,11 @@ using Booking.API.Middleware;
 using Booking.Application;
 using Booking.Application.BackgroundJobs;
 using Booking.Infrastructure;
+using Booking.Infrastructure.Persistence;
 using Common.Logging;
 using EventBus.RabbitMQ;
 using Hangfire;
+using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -17,7 +19,17 @@ builder.AddCommonSerilog();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddEventBus(builder.Configuration);
+
+builder.Services.AddEventBus(builder.Configuration, configure: x =>
+{
+    x.AddEntityFrameworkOutbox<BookingDbContext>(o =>
+    {
+        o.QueryDelay = TimeSpan.FromSeconds(5);
+        o.DuplicateDetectionWindow = TimeSpan.FromSeconds(30);
+        o.UseSqlServer();
+        o.UseBusOutbox();
+    });
+});
 
 // پیکربندی Hangfire
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")

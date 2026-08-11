@@ -1,3 +1,4 @@
+using Common.Caching;
 using Events.Application.Common.Models;
 using Events.Application.DTOs;
 using Events.Domain.Entities;
@@ -22,10 +23,12 @@ public record UpdateEventCommand(
 public class UpdateEventCommandHandler : IRequestHandler<UpdateEventCommand, ApiResponse<EventResponse>>
 {
     private readonly IEventRepository _eventRepository;
+    private readonly ICacheService _cacheService;
 
-    public UpdateEventCommandHandler(IEventRepository eventRepository)
+    public UpdateEventCommandHandler(IEventRepository eventRepository, ICacheService cacheService)
     {
         _eventRepository = eventRepository;
+        _cacheService = cacheService;
     }
 
     public async Task<ApiResponse<EventResponse>> Handle(UpdateEventCommand request, CancellationToken cancellationToken)
@@ -50,6 +53,9 @@ public class UpdateEventCommandHandler : IRequestHandler<UpdateEventCommand, Api
 
         await _eventRepository.UpdateAsync(@event);
 
+        // کش رویدادها را پاک کن — چون لیست/جزئیات تغییر کرده
+        await InvalidateEventCachesAsync(@event.Id, cancellationToken);
+
         var updated = await _eventRepository.GetByIdWithDetailsAsync(@event.Id, cancellationToken);
         if (updated is null)
         {
@@ -57,6 +63,13 @@ public class UpdateEventCommandHandler : IRequestHandler<UpdateEventCommand, Api
         }
 
         return ApiResponse<EventResponse>.Ok(MapToResponse(updated), "رویداد با موفقیت به‌روزرسانی شد");
+    }
+
+    private async Task InvalidateEventCachesAsync(int eventId, CancellationToken cancellationToken)
+    {
+        // پاک کردن همه کش‌های رویدادها — چون لیست و جزئیات ممکنه تغییر کرده باشن
+        await _cacheService.RemoveByPatternAsync("EventBride:events:*", cancellationToken);
+        await _cacheService.RemoveAsync(CacheKeys.EventById.Replace("{id}", eventId.ToString()), cancellationToken);
     }
 
     private static EventResponse MapToResponse(Event @event)

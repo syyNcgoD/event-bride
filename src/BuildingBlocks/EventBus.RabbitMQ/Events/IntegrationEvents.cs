@@ -19,3 +19,12 @@ public record BookingConfirmedEvent : IntegrationEvent
     public string EventTitle { get; init; } = string.Empty;
     public int TotalTickets { get; init; }
 }
+
+public record EventUpdatedIntegrationEvent : IntegrationEvent
+{
+    public Guid Id { get; init; } = Guid.NewGuid();
+    public DateTime CreationDate { get; init; } = DateTime.UtcNow;
+
+    public int EventId { get; init; }
+    public string Action { get; init; } = "Updated";
+}

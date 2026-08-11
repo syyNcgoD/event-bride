@@ -14,16 +14,12 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="FluentAssertions" Version="8.0.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <Using Include="Xunit" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\Services\Events\Events.Domain\Events.Domain.csproj" />
-    <ProjectReference Include="..\..\src\Services\Events\Events.Application\Events.Application.csproj" />
-    <ProjectReference Include="..\..\src\BuildingBlocks\Common.Caching\Common.Caching.csproj" />
+    <ProjectReference Include="..\..\src\Services\Booking\Booking.Application\Booking.Application.csproj" />
+    <ProjectReference Include="..\..\src\Services\Booking\Booking.Infrastructure\Booking.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
