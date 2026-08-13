@@ -1,158 +1,76 @@
-<div align="center">
-  <h1>🎟️ EventBride Microservices Platform</h1>
-  <p>A production-ready event ticketing and booking platform built with .NET 10, demonstrating advanced microservices architecture, distributed transactions, and concurrency handling.</p>
+# EventBride Microservices Platform
 
-  [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
-  [![RabbitMQ](https://img.shields.io/badge/RabbitMQ-Message_Broker-FF6600?logo=rabbitmq)](https://www.rabbitmq.com/)
-  [![Redis](https://img.shields.io/badge/Redis-Distributed_Cache-DC382D?logo=redis)](https://redis.io/)
-  [![Docker](https://img.shields.io/badge/Docker-Containerization-2496ED?logo=docker)](https://www.docker.com/)
-  [![Graphify](https://img.shields.io/badge/Graphify-1169_Nodes-8B5CF6?logo=graphql)](docs/graph/graph.html)
-</div>
+EventBride is a production-grade event ticketing and booking platform. It was built to demonstrate how to handle complex distributed system challenges—specifically concurrent transactions, distributed caching, and event-driven communication—using the .NET 10 ecosystem. 
 
-<br/>
+Rather than just another CRUD application, EventBride focuses heavily on tackling the "double-booking" problem under high concurrency and ensuring data consistency across multiple microservices.
 
-## 🎯 System Overview
+## Architecture & Core Design
 
-EventBride is a scalable event reservation system that tackles the classic "double-booking" problem. The primary goal of this project is not just to build CRUD APIs, but to demonstrate how to handle **concurrent transactions, distributed caching, and event-driven communication** in a microservices environment.
+The system relies on a Microservices architecture, where each service strictly adheres to Clean Architecture principles (Domain -> Application -> Infrastructure -> API).
 
-### 🏗️ High-Level Architecture
+- **Identity Service**: Handles authentication and JWT generation (ASP.NET Core Identity).
+- **Events Service**: Manages events, ticket types, and inventory. Implements caching and pessimistic locking.
+- **Booking Service**: Manages reservations, payments, and distributed transactions.
+- **Notification Service**: A decoupled worker that consumes events and handles outbound communications.
 
-```mermaid
-graph TD
-    Client[Client Apps] --> GW[API Gateway / YARP]
-    
-    GW --> IS[Identity Service]
-    GW --> ES[Events Service]
-    GW --> BS[Booking Service]
-    
-    IS <--> IDB[(Identity DB)]
-    ES <--> EDB[(Events DB)]
-    BS <--> BDB[(Booking DB)]
-    NS[Notification Service] <--> NDB[(Notification DB)]
-    
-    ES -.-> Redis[(Redis Cache)]
-    
-    BS -- "BookingConfirmedEvent" --> RMQ((RabbitMQ))
-    RMQ -- "Consume" --> NS
-    
-    BS -- "Reserve/Release Tickets" --> ES
-    
-    Hangfire((Hangfire)) -- "Cleanup Expired" --> BS
-```
+### Key Engineering Decisions
 
----
+1. **Concurrency & Locking**: 
+   To prevent overselling tickets during high-traffic surges, the Events Service uses SQL Server pessimistic locking (`WITH (UPDLOCK, ROWLOCK)`) at the row level. This ensures atomic ticket decrements. We also use optimistic concurrency (RowVersion) for order state management.
 
-## 🛠️ Key Technical Implementations
+2. **Distributed Transactions & Outbox Pattern**:
+   When a booking is confirmed, we need to update the local database and publish an event to RabbitMQ. To avoid dual-write issues (e.g. if RabbitMQ is down), we implemented the Transactional Outbox pattern using MassTransit and EF Core. 
 
-### 1. Concurrency Control (The Core Challenge)
-Handling simultaneous bookings for the same seat/ticket is managed using a robust locking strategy:
-- **Pessimistic Locking (`UPDLOCK`)**: The ticket inventory is protected using atomic SQL updates ensuring no overselling can occur even under heavy parallel load.
-- **Optimistic Concurrency (`RowVersion`)**: Applied on the `Order` entity using EF Core's built-in concurrency tokens.
+3. **Resilience & Fault Tolerance**:
+   Service-to-service HTTP calls are wrapped with Polly v8 resilience pipelines, implementing strict timeouts, exponential backoffs, and circuit breakers to prevent cascading failures.
 
-### 2. Distributed Caching (Cache-Aside Pattern)
-- **Redis Integration**: High-traffic endpoints (like `GetFeaturedEvents`) are cached.
-- **Fallback Mechanism**: The custom `CacheService` gracefully falls back to `IMemoryCache` if the distributed cache is unavailable.
+4. **Distributed Caching (Cache-Aside)**:
+   High-traffic endpoints (like the events catalog) are cached in Redis. We built a custom fallback mechanism so that if Redis is temporarily unreachable, it seamlessly degrades to in-memory caching.
 
-### 3. Background Jobs & State Management
-- **Hangfire**: Periodically runs a `ReservationCleanupJob`. If an order remains in a `Pending` state for more than 10 minutes, the job automatically cancels it and releases the reserved tickets back to the `Events` service.
+5. **Background Processing**:
+   We use Hangfire for scheduled and background jobs. For example, a `ReservationCleanupJob` runs periodically to identify pending orders older than 10 minutes, cancel them, and release the locked tickets back to the inventory pool.
 
-### 4. Event-Driven Architecture
-- **MassTransit & RabbitMQ**: When a payment is successfully processed, the Booking service publishes a `BookingConfirmedEvent`.
-- **Decoupled Consumers**: The Notification service consumes this event and logs the outgoing email/SMS, ensuring the booking transaction isn't blocked by slow third-party notification APIs.
+6. **Distributed Locking (RedLock)**:
+   In cases where multiple Hangfire instances might try to clean up the same resources, we utilize a Redis-based distributed lock to ensure only one instance processes the cleanup at a time.
 
-### 5. Observability & Logging
-- **Serilog + Seq**: Structured logging is configured across all services. Logs are enriched with the service name and context, then forwarded to a centralized Seq instance.
+## Tech Stack
 
----
+- **Framework**: .NET 10.0
+- **Database**: SQL Server & Entity Framework Core
+- **Message Broker**: RabbitMQ (via MassTransit)
+- **Caching & Locking**: Redis
+- **Background Jobs**: Hangfire
+- **Resilience**: Polly v8
+- **Observability**: Serilog & Seq
 
-## 📂 Project Structure
+## Getting Started
 
-Each service adheres strictly to **Clean Architecture** principles (Domain ➔ Application ➔ Infrastructure ➔ API), enforcing dependency inversion and highly testable code.
+To run the platform locally, you'll need the .NET 10 SDK and Docker Desktop installed.
 
-```text
-src/
-├── BuildingBlocks/                 # Shared libraries
-│   ├── Common.Caching/             # Redis + In-Memory unified wrapper
-│   ├── Common.Logging/             # Serilog bootstrap & extensions
-│   └── EventBus.RabbitMQ/          # MassTransit configuration & Event Contracts
-│
-├── Services/
-│   ├── Identity/                   # ASP.NET Core Identity + JWT Rotation
-│   ├── Events/                     # CQRS, Redis caching, Ticket Inventory (UPDLOCK)
-│   ├── Booking/                    # Distributed Transactions, Hangfire cleanup
-│   └── Notification/               # Worker Service (RabbitMQ Consumer)
-```
-
----
-
-## 🚀 Technologies & Libraries
-
-- **Framework:** .NET 10.0, ASP.NET Core Web API
-- **Architecture:** Microservices, Clean Architecture, CQRS
-- **Data Access:** Entity Framework Core (SQL Server)
-- **Design Patterns:** Repository, Unit of Work, Cache-Aside, Event Sourcing
-- **Libraries:**
-  - `MediatR` (CQRS implementations)
-  - `FluentValidation` (Request pipeline validation)
-  - `AutoMapper` (Entity-DTO mapping)
-  - `Hangfire` (Background processing)
-  - `MassTransit` (RabbitMQ Abstraction)
-  - `Serilog` (Structured logging)
-
----
-
-## 🕸️ Interactive Knowledge Graph (Graphify)
-
-This repository is fully indexed with [Graphify](https://github.com/Graphify-Labs/graphify) — a developer tool that turns codebases into a queryable knowledge graph. Instead of reading hundreds of files, you can *traverse* the architecture.
-
-**Graph stats:** `1,169 nodes` · `2,030 edges` · `104 communities` (97% extracted from source)
-
-- **[▶️ Open the Interactive Graph](docs/graph/graph.html)** — pan, zoom, and explore how every service, handler, and repository connects.
-- **[📄 Read the Graph Report](docs/graph/GRAPH_REPORT.md)** — community hubs, god nodes, and subsystem boundaries.
-
-```bash
-# Query the graph from your terminal
-graphify path "Event" "Order"                    # how do they connect?
-graphify explain "PessimisticLock"               # explain a concept
-graphify query "what connects Booking to Notification?"  # free-form
-```
-
-> Generated locally with `graphify extract --code-only` — no code ever leaves your machine.
-
----
-
-## 🚦 Getting Started
-
-### Prerequisites
-- .NET 10 SDK
-- Docker Desktop (for RabbitMQ, Redis, and Seq)
-- SQL Server (LocalDB or Docker container)
-
-### Local Setup
-1. **Start Infrastructure Services:**
+1. **Spin up the infrastructure**:
    ```bash
    docker run -d --name eventbride-redis -p 6379:6379 redis:7-alpine
    docker run -d --name eventbride-rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
    docker run -d --name eventbride-seq -e ACCEPT_EULA=Y -p 5341:80 datalust/seq:latest
    ```
 
-2. **Run Migrations:**
-   Each service will automatically run its EF Core migrations on startup if the database doesn't exist.
-
-3. **Run the Microservices:**
-   Open separate terminals and start each service:
+2. **Run the microservices**:
+   Open separate terminals and start each service from the root directory:
    ```bash
    dotnet run --project src/Services/Identity/Identity.API
    dotnet run --project src/Services/Events/Events.API
    dotnet run --project src/Services/Booking/Booking.API
    dotnet run --project src/Services/Notification/Notification.API
    ```
+   *Note: EF Core migrations will run automatically on startup to seed the databases.*
 
-4. **Access Swagger UI:**
+3. **Access APIs**:
+   Each service exposes a Swagger UI:
    - Identity: `http://localhost:5001/swagger`
    - Events: `http://localhost:5002/swagger`
    - Booking: `http://localhost:5003/swagger`
    - Hangfire Dashboard: `http://localhost:5003/hangfire`
 
----
-*Developed as a showcase of enterprise-grade backend engineering practices in .NET ecosystem.*
+## Project Knowledge Graph
+
+If you want to explore the architecture interactively, we've indexed the codebase with Graphify. You can view the full dependency graph and community boundaries [here](docs/graph/graph.html), or read the [graph report](docs/graph/GRAPH_REPORT.md).
