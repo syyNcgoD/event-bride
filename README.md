@@ -34,34 +34,55 @@ The platform enforces **Clean Architecture** (Domain ➔ Application ➔ Infrast
 
 ```mermaid
 graph TD
-    Client[Client Applications] --> GW[YARP API Gateway]
-    
+    Client(["Client Applications"]) --> GW["YARP API Gateway"]
+
     subgraph Services ["Core Services"]
-        GW --> IS[Identity Service]
-        GW --> ES[Events Service]
-        GW --> BS[Booking Service]
-        
-        IS <--> IDB[(Identity DB)]
-        ES <--> EDB[(Events DB)]
-        BS <--> BDB[(Booking DB)]
+        GW --> IS["Identity Service"]
+        GW --> ES["Events Service"]
+        GW --> BS["Booking Service"]
+
+        IS <--> IDB[("Identity DB")]
+        ES <--> EDB[("Events DB")]
+        BS <--> BDB[("Booking DB")]
     end
-    
+
     subgraph Caching ["Caching Layer"]
-        ES <== "Cache-Aside & Invalidation" ==> Redis[(Redis Cluster)]
+        Redis[("Redis Cluster")]
+        ES <==>|"Cache-Aside & Invalidation"| Redis
     end
 
     subgraph Messaging ["Event-Driven Outbox Flow"]
+        OutboxWorker[["MassTransit Outbox Publisher"]]
+        RMQ{{"RabbitMQ Message Broker"}}
+        NS["Notification Service"]
+        NDB[("Notification DB")]
+
         BS -- "1. Atomic Transaction (Order + Outbox)" --> BDB
-        OutboxWorker[MassTransit Outbox Publisher] -- "2. Fetch Pending" --> BDB
-        OutboxWorker -- "3. Publish BookingConfirmedEvent" --> RMQ((RabbitMQ Message Broker))
-        RMQ -- "4. Consume & Dispatch" --> NS[Notification Service]
-        NS <--> NDB[(Notification DB)]
+        OutboxWorker -- "2. Fetch Pending" --> BDB
+        OutboxWorker -- "3. Publish BookingConfirmedEvent" --> RMQ
+        RMQ -- "4. Consume & Dispatch" --> NS
+        NS <--> NDB
     end
 
     subgraph Background ["Background Processing & Locks"]
-        Hangfire((Hangfire Coordinator)) -- "1. Acquire RedLock" --> Redis
+        Hangfire[["Hangfire Coordinator"]]
+        Hangfire -- "1. Acquire RedLock" --> Redis
         Hangfire -- "2. Cancel Expired Reservations" --> BS
     end
+
+    classDef service fill:#4C6EF5,stroke:#364FC7,color:#fff
+    classDef database fill:#12B886,stroke:#087F5B,color:#fff
+    classDef cache fill:#FD7E14,stroke:#E8590C,color:#fff
+    classDef broker fill:#7048E8,stroke:#5F3DC4,color:#fff
+    classDef worker fill:#495057,stroke:#212529,color:#fff
+    classDef client fill:#868E96,stroke:#495057,color:#fff
+
+    class Client client
+    class GW,IS,ES,BS,NS service
+    class IDB,EDB,BDB,NDB database
+    class Redis cache
+    class RMQ broker
+    class OutboxWorker,Hangfire worker
 ```
 
 ---
