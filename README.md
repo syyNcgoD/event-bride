@@ -1,76 +1,173 @@
-# EventBride Microservices Platform
+<div align="center">
+  <h1>🎟️ EventBride Enterprise Platform</h1>
+  <p><b>Production-grade Distributed Event Reservation & Ticketing Microservices built with .NET 10</b></p>
 
-EventBride is a production-grade event ticketing and booking platform. It was built to demonstrate how to handle complex distributed system challenges—specifically concurrent transactions, distributed caching, and event-driven communication—using the .NET 10 ecosystem. 
+  [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+  [![RabbitMQ](https://img.shields.io/badge/RabbitMQ-Message_Broker-FF6600?logo=rabbitmq&logoColor=white)](https://www.rabbitmq.com/)
+  [![Redis](https://img.shields.io/badge/Redis-Distributed_Cache_%26_Locks-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+  [![Docker](https://img.shields.io/badge/Docker-Containerization-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+  [![SQL Server](https://img.shields.io/badge/SQL_Server-Database-CC292B?logo=microsoftsqlserver&logoColor=white)](https://www.microsoft.com/sql-server)
+  [![Polly](https://img.shields.io/badge/Polly-Resilience-0078D4)](https://github.com/App-vNext/Polly)
+</div>
 
-Rather than just another CRUD application, EventBride focuses heavily on tackling the "double-booking" problem under high concurrency and ensuring data consistency across multiple microservices.
+<br/>
 
-## Architecture & Core Design
+## 📌 Executive Summary
 
-The system relies on a Microservices architecture, where each service strictly adheres to Clean Architecture principles (Domain -> Application -> Infrastructure -> API).
+**EventBride** is a distributed, high-throughput event reservation platform engineered to tackle enterprise-scale backend challenges. The system is designed to solve real-world distributed system problems including **ticket overselling under surge traffic (Race Conditions)**, **dual-write inconsistency (Transactional Outbox)**, **cascading service failures (Polly Resilience Pipelines)**, and **distributed background processing (RedLock + Hangfire)**.
 
-- **Identity Service**: Handles authentication and JWT generation (ASP.NET Core Identity).
-- **Events Service**: Manages events, ticket types, and inventory. Implements caching and pessimistic locking.
-- **Booking Service**: Manages reservations, payments, and distributed transactions.
-- **Notification Service**: A decoupled worker that consumes events and handles outbound communications.
+Rather than a simple CRUD sample, this repository showcases production-hardened microservices architecture following strict **Clean Architecture**, **Domain-Driven Design (DDD)**, and **CQRS** principles.
 
-### Key Engineering Decisions
+---
 
-1. **Concurrency & Locking**: 
-   To prevent overselling tickets during high-traffic surges, the Events Service uses SQL Server pessimistic locking (`WITH (UPDLOCK, ROWLOCK)`) at the row level. This ensures atomic ticket decrements. We also use optimistic concurrency (RowVersion) for order state management.
+## 🏗️ Architecture Diagram
 
-2. **Distributed Transactions & Outbox Pattern**:
-   When a booking is confirmed, we need to update the local database and publish an event to RabbitMQ. To avoid dual-write issues (e.g. if RabbitMQ is down), we implemented the Transactional Outbox pattern using MassTransit and EF Core. 
+```mermaid
+graph TD
+    Client[Client Applications / API Consumers] --> GW[API Gateway / YARP]
+    
+    subgraph "Core Microservices"
+        GW --> IS[Identity Service]
+        GW --> ES[Events Service]
+        GW --> BS[Booking Service]
+        
+        IS <--> IDB[(Identity DB)]
+        ES <--> EDB[(Events DB)]
+        BS <--> BDB[(Booking DB)]
+    end
+    
+    subgraph "Infrastructure & Async Messaging"
+        ES <== "Cache-Aside & Invalidation" ==> Redis[(Redis Cluster)]
+        BS -- "Save Order + Outbox Message" --> BDB
+        
+        OutboxProcessor[MassTransit Outbox Processor] -- "Polls & Publishes" --> BDB
+        OutboxProcessor -- "BookingConfirmedEvent" --> RMQ((RabbitMQ Message Broker))
+        
+        RMQ -- "Consume & Send Notification" --> NS[Notification Service]
+        NS <--> NDB[(Notification DB)]
+    end
 
-3. **Resilience & Fault Tolerance**:
-   Service-to-service HTTP calls are wrapped with Polly v8 resilience pipelines, implementing strict timeouts, exponential backoffs, and circuit breakers to prevent cascading failures.
+    subgraph "Distributed Background Jobs"
+        Hangfire((Hangfire Coordinator)) -- "RedLock Lock Acquisition" --> Redis
+        Hangfire -- "Cancel Stale Reservations" --> BS
+    end
+```
 
-4. **Distributed Caching (Cache-Aside)**:
-   High-traffic endpoints (like the events catalog) are cached in Redis. We built a custom fallback mechanism so that if Redis is temporarily unreachable, it seamlessly degrades to in-memory caching.
+---
 
-5. **Background Processing**:
-   We use Hangfire for scheduled and background jobs. For example, a `ReservationCleanupJob` runs periodically to identify pending orders older than 10 minutes, cancel them, and release the locked tickets back to the inventory pool.
+## 🚀 Key Production Hardening Features
 
-6. **Distributed Locking (RedLock)**:
-   In cases where multiple Hangfire instances might try to clean up the same resources, we utilize a Redis-based distributed lock to ensure only one instance processes the cleanup at a time.
+### 1. High-Concurrency Ticket Reservations (Preventing Over-selling)
+- **Pessimistic Row-Level Locking**: Ticket inventory decrements in `Events.Infrastructure` utilize SQL Server `WITH (UPDLOCK, ROWLOCK)` hints. This ensures thread-safe, atomic inventory updates at the database level even during flash-sale traffic surges.
+- **Distributed Locking (RedLock)**: Critical cross-service operations acquire Redis-based distributed locks to eliminate race conditions across multiple API instances.
 
-## Tech Stack
+### 2. Distributed Transactions & Transactional Outbox Pattern
+- Implemented **MassTransit EF Core Outbox** in `Booking.API`.
+- When an order is confirmed, local database updates and integration events (`BookingConfirmedEvent`) are committed in a **single atomic database transaction**.
+- Prevents data inconsistency and dual-write issues if the message broker is temporarily unreachable.
 
-- **Framework**: .NET 10.0
-- **Database**: SQL Server & Entity Framework Core
-- **Message Broker**: RabbitMQ (via MassTransit)
-- **Caching & Locking**: Redis
-- **Background Jobs**: Hangfire
-- **Resilience**: Polly v8
-- **Observability**: Serilog & Seq
+### 3. Distributed Resilience Pipeline (Polly v8)
+- Inter-service HTTP calls are fortified with `Microsoft.Extensions.Http.Resilience`.
+- Features configured pipelines: **Total Request Timeout**, **Rate Limiter**, **Exponential Backoff Retry**, and **Circuit Breaker** to prevent cascading network failures.
 
-## Getting Started
+### 4. Background Job Concurrency Control
+- **Hangfire Clean-up Job**: Scans for unfulfilled reservations older than 10 minutes and gracefully returns tickets back to the available inventory pool.
+- Uses `IDistributedLockService` to guarantee that only **one single Hangfire instance** executes cleanup tasks across distributed nodes.
 
-To run the platform locally, you'll need the .NET 10 SDK and Docker Desktop installed.
+### 5. Multi-Layer Caching Architecture
+- **Cache-Aside Pattern**: High-frequency read endpoints (e.g. Featured Events) utilize Redis distributed caching.
+- **Graceful Fallback**: If Redis becomes unavailable, the caching layer seamlessly degrades to in-memory caching without throwing runtime exceptions.
+- **Event-Driven Invalidation**: Event updates automatically publish invalidation signals to keep cache nodes synchronized.
 
-1. **Spin up the infrastructure**:
+---
+
+## 📂 Project Structure
+
+The solution enforces strict separation of concerns via Clean Architecture (Domain ➔ Application ➔ Infrastructure ➔ API):
+
+```text
+EventBride/
+├── src/
+│   ├── BuildingBlocks/
+│   │   ├── Common.Caching/          # Redis + In-Memory unified wrapper & Distributed Lock
+│   │   ├── Common.Logging/          # Serilog bootstrap & structured logging extensions
+│   │   └── EventBus.RabbitMQ/       # MassTransit contracts & RabbitMQ bus configuration
+│   │
+│   └── Services/
+│       ├── Identity/                # Authentication, ASP.NET Core Identity & JWT
+│       ├── Events/                  # Event Catalog, Inventory Management (UPDLOCK), CQRS
+│       ├── Booking/                 # Reservations, MassTransit Outbox, Hangfire & Resilience
+│       └── Notification/            # Asynchronous Worker Service (RabbitMQ Consumer)
+│
+└── tests/
+    ├── Booking.UnitTests/           # Unit tests for Handlers & Outbox logic
+    ├── Events.UnitTests/            # Ticket inventory concurrency tests
+    ├── Booking.IntegrationTests/    # Testcontainers integration suite
+    └── k6-concurrency-test.js       # Chaos load testing script for flash-sale scenarios
+```
+
+---
+
+## 🛠️ Tech Stack & Ecosystem
+
+| Layer | Technology / Library |
+|---|---|
+| **Framework** | .NET 10.0, C# 13, ASP.NET Core Web API |
+| **Architecture** | Microservices, Clean Architecture, CQRS, Domain-Driven Design |
+| **Data Access** | Entity Framework Core 10, SQL Server |
+| **Messaging** | MassTransit, RabbitMQ |
+| **Caching & Locking** | Redis (StackExchange.Redis), Lua Distributed Lock (RedLock) |
+| **Background Processing** | Hangfire |
+| **Resilience** | Polly v8 (`Microsoft.Extensions.Http.Resilience`) |
+| **API Gateway** | YARP (Yet Another Reverse Proxy) |
+| **Observability** | Serilog, Seq Structured Logging |
+| **Testing** | xUnit, FluentAssertions, Moq, Testcontainers, k6 |
+
+---
+
+## 🚦 Getting Started
+
+### Prerequisites
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
+### Local Development Setup
+
+1. **Spin up Infrastructure Containers:**
    ```bash
    docker run -d --name eventbride-redis -p 6379:6379 redis:7-alpine
    docker run -d --name eventbride-rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
    docker run -d --name eventbride-seq -e ACCEPT_EULA=Y -p 5341:80 datalust/seq:latest
    ```
 
-2. **Run the microservices**:
-   Open separate terminals and start each service from the root directory:
+2. **Run Microservices:**
+   Launch each service in a separate terminal:
    ```bash
    dotnet run --project src/Services/Identity/Identity.API
    dotnet run --project src/Services/Events/Events.API
    dotnet run --project src/Services/Booking/Booking.API
    dotnet run --project src/Services/Notification/Notification.API
    ```
-   *Note: EF Core migrations will run automatically on startup to seed the databases.*
+   *Note: Database migrations execute automatically on startup.*
 
-3. **Access APIs**:
-   Each service exposes a Swagger UI:
-   - Identity: `http://localhost:5001/swagger`
-   - Events: `http://localhost:5002/swagger`
-   - Booking: `http://localhost:5003/swagger`
-   - Hangfire Dashboard: `http://localhost:5003/hangfire`
+3. **Access Endpoints & Dashboards:**
+   - **Identity API:** `http://localhost:5001/swagger`
+   - **Events API:** `http://localhost:5002/swagger`
+   - **Booking API:** `http://localhost:5003/swagger`
+   - **Hangfire Dashboard:** `http://localhost:5003/hangfire`
+   - **Seq Centralized Logs:** `http://localhost:5341`
 
-## Project Knowledge Graph
+---
 
-If you want to explore the architecture interactively, we've indexed the codebase with Graphify. You can view the full dependency graph and community boundaries [here](docs/graph/graph.html), or read the [graph report](docs/graph/GRAPH_REPORT.md).
+## 🧪 Testing & Quality Assurance
+
+Run the automated test suite locally:
+
+```bash
+# Run Unit Tests
+dotnet test tests/Booking.UnitTests/Booking.UnitTests.csproj
+dotnet test tests/Events.UnitTests/Events.UnitTests.csproj
+
+# Run Load Test with k6
+k6 run tests/k6-concurrency-test.js
+```
